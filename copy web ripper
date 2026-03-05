@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+╔══════════════════════════════════════════════════════════════╗
+║           WEB RIPPER v2.0 - PYTHON EDITION                  ║
+║        Extract all source code from any website              ║
+║                  © BabehRoot - FIRMWARE 0x7A                 ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+
+import os
+import sys
+import requests
+import shutil
+import re
+from urllib.parse import urljoin, urlparse
+from bs4 import BeautifulSoup
+from pathlib import Path
+
+# ========== KONFIGURASI ==========
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
+TIMEOUT = 10
+DOWNLOAD_ASSETS = True  # Set False kalo mau hemat bandwidth (hanya simpan HTML)
+
+# ========== BANNER ==========
+def print_banner():
+    banner = """
+\033[1;36m
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║     ██╗    ██╗███████╗██████╗     ██████╗ ██╗██████╗ ██████╗ ███████╗████>
+║     ██║    ██║██╔════╝██╔══██╗    ██╔══██╗██║██╔══██╗██╔══██╗██╔════╝██╔═>
+║     ██║ █╗ ██║█████╗  ██████╔╝    ██████╔╝██║██████╔╝██████╔╝█████╗  ████>
+║     ██║███╗██║██╔══╝  ██╔══██╗    ██╔═══╝ ██║██╔══██╗██╔══██╗██╔══╝  ██╔═>
+║     ╚███╔███╔╝███████╗██████╔╝    ██║     ██║██║  ██║██║  ██║███████╗██║ >
+║      ╚══╝╚══╝ ╚══════╝╚═════╝     ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝ >
+║                                                              ║
+║              🌐 WEB SOURCE CODE RIPPER v2.0                  ║
+║           Extract HTML, CSS, JS, Images, Fonts               ║
+║                     FIRMWARE 0x7A                             ║
+╚══════════════════════════════════════════════════════════════╝
+\033[0m
+"""
+    print(banner)
+
+# ========== UTILITY ==========
+def create_folder(path):
+    """Buat folder jika belum ada"""
+    Path(path).mkdir(parents=True, exist_ok=True)
+    print(f"📁 Folder dibuat: {path}")
+
+def download_file(url, local_path):
+    """Download file dari URL dan simpan ke local_path"""
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT, stream=True)
+        response.raise_for_status()
+        with open(local_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return True
+    except Exception as e:
+        print(f"  ⚠️ Gagal download {url}: {e}")
+        return False
+
+def sanitize_filename(filename):
+    """Hapus karakter aneh dari nama file"""
+    return re.sub(r'[\\/*?:"<>|]', '_', filename)
+
+def get_file_extension(url):
+def get_file_extension(url):
+    """Dapatkan ekstensi file dari URL"""
+    parsed = urlparse(url)
+    path = parsed.path
+    ext = os.path.splitext(path)[1].lower()
+    if ext in ['.css', '.js', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.woff', '.woff2', '.ttf', '.eot']:
+        return ext
+    return None
+
+# ========== MAIN RIPPER ==========
+def rip_website(url, output_dir):
+    """Fungsi utama: ambil semua source code dari website"""
+    print(f"\n🌐 Target: {url}")
+    print(f"📂 Output folder: {output_dir}\n")
+
+    # Normalisasi URL
+    if not url.startswith('http'):
+        url = 'http://' + url
+    parsed_base = urlparse(url)
+    base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
+
+    # Buat folder output
+    create_folder(output_dir)
+
+    # ========== 1. AMBIL HTML ==========
+    print("🔍 Mengambil HTML...")
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        response.raise_for_status()
+        html_content = response.text
+        html_path = os.path.join(output_dir, 'index.html')
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        print(f"  ✅ HTML tersimpan: index.html")
+    except Exception as e:
+        print(f"  ❌ Gagal ambil HTML: {e}")
+        return
+
+    # ========== 2. PARSE HTML ==========
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # Kumpulkan semua link asset
+    assets = []
+
+    # CSS dari <link>
+    for tag in soup.find_all('link', rel='stylesheet'):
+        href = tag.get('href')
+        if href:
+            full_url = urljoin(url, href)
+            ext = get_file_extension(full_url)
+            if ext:
+                assets.append(('css', full_url))
+
+    # JS dari <script src>
+    for tag in soup.find_all('script', src=True):
+        src = tag.get('src')
+        if src:
+            full_url = urljoin(url, src)
+            ext = get_file_extension(full_url)
+            if ext:
+                assets.append(('js', full_url))
+
+    # Gambar dari <img>
+    for tag in soup.find_all('img', src=True):
+        src = tag.get('src')
+        if src:
+            full_url = urljoin(url, src)
+            ext = get_file_extension(full_url)
+            if ext:
+                assets.append(('img', full_url))
+
+# Font dari <link> atau CSS nanti? Ini masih sederhana, kita tangkap dari @font-face nanti
+    # Untuk sekarang, kita tangkap juga file dari <link> yang mungkin font
+    for tag in soup.find_all('link', href=True):
+        href = tag.get('href')
+        if href and any(f in href for f in ['.woff', '.woff2', '.ttf', '.eot']):
+            full_url = urljoin(url, href)
+            assets.append(('font', full_url))
+
+    # Hapus duplikat
+    unique_assets = list(set(assets))
+    print(f"\n🔗 Ditemukan {len(unique_assets)} file aset (CSS, JS, gambar, font).")
+
+    if not DOWNLOAD_ASSETS:
+        print("⚙️  DOWNLOAD_ASSETS = False, hanya menyimpan daftar URL.")
+        # Simpan daftar URL ke file
+        list_path = os.path.join(output_dir, 'asset_urls.txt')
+        with open(list_path, 'w') as f:
+            for asset_type, asset_url in unique_assets:
+                f.write(f"[{asset_type}] {asset_url}\n")
+        print(f"  ✅ Daftar URL tersimpan: asset_urls.txt")
+        return
+
+    # ========== 3. DOWNLOAD ASSET ==========
+    print("\n📥 Mengunduh aset...")
+    downloaded = 0
+    failed = 0
+
+    for idx, (asset_type, asset_url) in enumerate(unique_assets, 1):
+        # Tentukan subfolder berdasarkan tipe
+        if asset_type == 'css':
+            subfolder = 'css'
+        elif asset_type == 'js':
+            subfolder = 'js'
+        elif asset_type in ['img', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']:
+            subfolder = 'images'
+        elif asset_type == 'font':
+            subfolder = 'fonts'
+        else:
+            subfolder = 'assets'
+
+        # Buat subfolder
+        asset_dir = os.path.join(output_dir, subfolder)
+        create_folder(asset_dir)
+
+        # Tentukan nama file
+        parsed = urlparse(asset_url)
+        filename = os.path.basename(parsed.path)
+        if not filename or filename == '/':
+            filename = f"asset_{idx}{get_file_extension(asset_url) or '.bin'}"
+        filename = sanitize_filename(filename)
+
+        local_path = os.path.join(asset_dir, filename)
+
+        # Cek apakah sudah ada (hindari duplikat)
+        if os.path.exists(local_path):
+            print(f"  ⏩ {idx}. {filename} sudah ada, lewati.")
+            downloaded += 1
+            continue
+
+        print(f"  ⬇️ {idx}. {filename}...", end='', flush=True)
+        success = download_file(asset_url, local_path)
+        if success:
+            print(" ✅")
+            downloaded += 1
+        else:
+            print(" ❌")
+            failed += 1
+
+# ========== 4. SELESAI ==========
+    print(f"\n✅ Selesai! {downloaded} file berhasil diunduh, {failed} gagal .")
+    print(f"📁 Semua file tersimpan di: {os.path.abspath(output_dir)}")
+
+# ========== MAIN ==========
+if __name__ == "__main__":
+    print_banner()
+
+    try:
+        # Input URL
+        url = input("🌐 Masukkan URL target (contoh: https://example.com): >
+        if not url:
+            print("❌ URL tidak boleh kosong!")
+            sys.exit(1)
+
+        # Input folder tujuan
+        default_folder = os.path.join(os.getcwd(), "web_ripper_output")
+        folder = input(f"📁 Folder output (Enter untuk default: {default_folder}): ").strip()
+        if not folder:
+            folder = default_folder
+
+        # Konfirmasi
+        print("\n⚙️  Konfigurasi:")
+        print(f"   URL    : {url}")
+        print(f"   Folder : {folder}")
+        confirm = input("\n✅ Lanjutkan? (y/n): ").strip().lower()
+        if confirm != 'y':
+            print("❌ Dibatalkan.")
+            sys.exit(0)
+
+        # Mulai ripping
+        rip_website(url, folder)
+
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Dibatalkan oleh user.")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ Error fatal: {e}")
+        sys.exit(1)
